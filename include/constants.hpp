@@ -1,12 +1,14 @@
 #ifndef CONST_HPP
 #define CONST_HPP
+
 #define ESP8266 1
 #include <Arduino.h>
+#include "passkeys.hpp"
 
 #define ESP_LED 2
 #define MCU_LED 16
 
-#define DHTPIN 0
+#define DHTPIN 5
 #define DHTTYPE DHT11
 
 #define PORT 443
@@ -18,7 +20,7 @@
 #define SECOND 1L
 #define MINUTE 60L
 #define HOUR 3600L
-const unsigned long DEFAULT_TIMER = 10*SECOND;
+const unsigned long DEFAULT_TIMER = 5*SECOND;
 
 // in millis got by ESP platform inside timeClient
 const unsigned long TIME_UPDATE_INTERVAL = 10000;
@@ -30,12 +32,12 @@ static const char HTML_CLI_VIEW[] PROGMEM = R"EOF(
     <body>
     <input id="command" style="width:100%;max-width:100%;"/>
     <hr/>
-    <textarea id="console" readonly="true" style="width:100%; max-width:100%;">
+    <textarea id="console" readonly="true" style="width:100%; min-height:70%; max-width:100%;">
     </textarea>
     <script>
         let console_area = document.getElementById("console");
         console_area.value = "";
-        
+
         function getSseData() {
                 var evtSource = new EventSource('/cli/stream',
                   {
@@ -56,6 +58,7 @@ static const char HTML_CLI_VIEW[] PROGMEM = R"EOF(
                     if (e.data != "keep-alive") {
                         console.log(e);
                         console_area.value += e.data + "\n";
+                        console_area.scrollTop = console_area.scrollHeight;
                     }
                 }, false);
         };

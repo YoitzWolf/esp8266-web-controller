@@ -32,9 +32,8 @@ void OutputStream::push() {
         StreamEvent evt = this->stream_events.front();
         this->stream_events.pop_front();
         for(auto it: this->connections) {
-            Serial.println("Try to send to client");
             it.second.client.println("event: esp8266");
-            it.second.client.println(("data: " + evt.format()).c_str() ); // ));
+            it.second.client.println(("data: " + evt.format()).c_str() );
             it.second.client.println();
             it.second.client.flush();
         }
