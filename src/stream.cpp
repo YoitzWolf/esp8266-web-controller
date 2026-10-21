@@ -3,17 +3,17 @@
 #include "utils.hpp"
 
 std::string StreamEvent::format() {
-    return "[" + timestamp_to_str(this->time_stamp) + " | " +
+    return "[" + timestamp_to_str(this->_time_stamp) + " | " +
         this->tag + "]: " + this->msg + ";";
 }
-
+/*
 void OutputStream::cleanup() {
     for(auto it: this->connections) {
         if (it.second.client.connected()) {
-            it.second.client.println("event: esp8266");
-            it.second.client.println("data: keep-alive");
-            it.second.client.println();
-            it.second.client.flush();
+            // it.second.client.println("event: esp8266");
+            // it.second.client.println("data: keep-alive");
+            // it.second.client.println();
+            // it.second.client.flush();
         } else {
             Serial.println("Client Dead..");
             it.second.client.flush();
@@ -58,3 +58,4 @@ std::string OutputStream::add_connection(StreamConnection connection) {
     );
     return s;
 }
+    */

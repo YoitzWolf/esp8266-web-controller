@@ -8,12 +8,16 @@
 #define ESP_LED 2
 #define MCU_LED 16
 
+#define RELAY 13
+#define RELAY_ON pinMode(RELAY, INPUT)
+#define RELAY_OFF pinMode(RELAY, OUTPUT)
+
 #define DHTPIN 5
 #define DHTTYPE DHT11
 
 #define PORT 443
 
-#define CACHE_SIZE 5
+#define CACHE_SIZE 2
 #define USE_CACHE
 
 // UNIX EPOCH TIME, DO NOT USE FOR DELAYS
@@ -22,49 +26,99 @@
 #define HOUR 3600L
 const unsigned long DEFAULT_TIMER = 5*SECOND;
 
+
+const unsigned long MS = 1000;
 // in millis got by ESP platform inside timeClient
-const unsigned long TIME_UPDATE_INTERVAL = 10000;
+const unsigned long TIME_UPDATE_INTERVAL = MINUTE*1000; // 1 minute
 // 10800 is MSK (in seconds)
 const unsigned long TIMEZONE_GAP = 10800;
 
+#define LOCAL_ESP_DNS "esp8266"
+
 static const char HTML_CLI_VIEW[] PROGMEM = R"EOF(
     <!DOCTYPE html><html>
-    <body>
-    <input id="command" style="width:100%;max-width:100%;"/>
+    <header>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+            }
+            
+            hr {
+                margin: 10px;
+            }
+
+            .c100 {
+                width:100%;
+                max-width:100%;
+                min-width:100%;
+            }
+        </style>
+    </header>
+    <body style="padding:30px;">
+    <input id="command" class="c100"/>
+    <button id="command-run" class="c100" style="min-height:50px; background: lightgreen; " onclick="btnOnClick()"> Send Command </button>
     <hr/>
-    <textarea id="console" readonly="true" style="width:100%; min-height:70%; max-width:100%;">
+    <textarea id="console" class="c100" readonly="true" style="min-height:500px;">
     </textarea>
     <script>
         let console_area = document.getElementById("console");
+        let command = document.getElementById("command");
+        let on_poll = false;
         console_area.value = "";
-
-        function getSseData() {
-                var evtSource = new EventSource('/cli/stream',
-                  {
-                    withCredentials: true
-                  }
-                );
-                console.log("Event Stream created");
-                evtSource.onopen = function() {
-                    console.log("Connection to server opened.");
-                };
-                evtSource.onmessage = function(e) {
-                    console.log('EventSource.onmessage log');
-                };
-                evtSource.onerror = function() {
-                    console.log("EventSource failed.");
-                };
-                evtSource.addEventListener("esp8266", function(e) {
-                    if (e.data != "keep-alive") {
-                        console.log(e);
-                        console_area.value += e.data + "\n";
-                        console_area.scrollTop = console_area.scrollHeight;
+        command.value = "help";
+        function add_stream(stream) {
+            let data = stream.data;
+            console.log('Success:', data);
+            data.forEach((item, i) => {
+                console.log(i, item);
+                console_area.value += item + "\n";
+                console_area.scrollTop = console_area.scrollHeight;
+            });
+        }
+        function btnOnClick() {
+            on_poll=true;
+            console.log(command.value);
+            request = new Request(
+                "/cli/poll", {
+                    method: "POST",
+                    credentials: 'include',
+                    body: command.value,
+                    headers: {
+                        'Content-Type': 'text/plain'
                     }
-                }, false);
+                }
+            );
+            fetch(request)
+                .then(response => response.json())
+                .then(data => {add_stream(data); on_poll=false;})
+                .catch(error => console.error('Error:', error));
         };
-        getSseData();
+        function startPollTimer() {
+            if (!on_poll) {
+                let request = new Request(
+                    "/cli/poll", {
+                        method: "GET",
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'text/plain'
+                        }
+                    }
+                );
+                fetch(request)
+                    .then(response => response.json())
+                    .then(data => add_stream(data))
+                    .catch(error => console.error('Error:', error));
+            };
+        };
+        setTimeout(
+            () => {
+                setInterval(startPollTimer, 15000);
+            }, 2000
+        );
     </script>
     </body></html>
 )EOF";
+
 
 #endif

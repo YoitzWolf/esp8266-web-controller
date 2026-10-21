@@ -24,6 +24,8 @@ void TimerState::start() {
     this->on_run = true;
     if (this->ntc_client != NULL) {
         this->last_tick = this->ntc_client->getEpochTime();
+    } else {
+        Serial.println("No NTC client found");
     }
 }
 
@@ -73,5 +75,39 @@ bool TimerState::handle_timer() {
     }
     os_timer_arm(&_timer_internal, milliseconds, this->repeat);
 
+    return false;
+}
+
+bool TimerState::fast_call() {
+    bool isArmed = (_timer_internal.timer_next != nullptr);
+
+    if (isArmed) {
+        os_timer_disarm(&_timer_internal);
+    }
+    this->callback();
+    if (isArmed) {
+        ets_timer_setfn(
+            &_timer_internal,
+            [](void* ptr) {
+                auto tmr = reinterpret_cast<TimerState*>(ptr);
+                tmr->callback();
+            }, this
+        );
+        size_t total = 0;
+        size_t milliseconds = this->time_in_ms;
+        if (milliseconds > DURATION_MAX) {
+            total = 1;
+            while (milliseconds > DURATION_MAX) {
+                total *= 2;
+                milliseconds /= 2;
+            }
+            this->long_tick.reset(new TimerState::LongTicker{
+                .total = total,
+                .count = 0,
+            });
+            repeat = true;
+        }
+        os_timer_arm(&_timer_internal, milliseconds, this->repeat);
+    }
     return false;
 }

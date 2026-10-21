@@ -13,13 +13,14 @@ static constexpr auto DURATION_MAX = 6870947;
 class TimerState
 {
 private:
-    NTPClient *ntc_client = nullptr;
+    NTPClient *ntc_client; // = nullptr;
     unsigned long last_tick;
     unsigned long time_in_ms;
-    std::function<void(void)> run = NULL;
+    std::function<void(void)> run; // = NULL;
     bool on_run = false;
     ETSTimer _timer_internal{};
     bool repeat = false;
+
 protected:
     struct LongTicker
     {
@@ -31,31 +32,42 @@ protected:
     void finish();
     void start();
     void callback();
+
 public:
-  unsigned long get_last_tick();
+    unsigned long get_last_tick();
 
-  /**
-   * Return last epoch, when timer called its callback
-   */
-  void set_last_tick(unsigned long val);
+    unsigned long period_ms(){
+        return this->time_in_ms;
+    };
 
-  bool is_running();
+    /**
+     * Return last epoch, when timer called its callback
+     */
+    void set_last_tick(unsigned long val);
 
-  /**
-   * Run timer
-   */
-  bool handle_timer();
+    bool is_running();
 
-  TimerState(
-      unsigned long time_in_ms,
-      std::function<void(void)> run,
-      NTPClient *ntc_client,
-      bool repeat = false
-    ) : last_tick(0),
+    bool is_repeat() { return this->repeat; };
+
+    /**
+     * Run timer
+     */
+    bool handle_timer();
+
+    bool fast_call();
+
+    TimerState(
+        unsigned long time_in_ms,
+        std::function<void(void)> run,
+        NTPClient *ntc_client,
+        bool repeat = false,
+        unsigned long last_tick=0
+    ) : last_tick(last_tick),
         time_in_ms(time_in_ms),
         run(run),
+        ntc_client(ntc_client),
         on_run(false),
-        repeat(repeat) 
+        repeat(repeat)
     {
         this->long_tick.reset(nullptr);
     };

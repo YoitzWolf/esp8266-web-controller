@@ -28,3 +28,13 @@ std::string timestamp_to_str(unsigned long time_stamp) {
     std::string sf = bufstring;
     return sf;
 }
+
+std::string timestamp_to_str_time(unsigned long time_stamp) {
+    unsigned long hours   = ((time_stamp) / 3600);
+    unsigned long minutes = ((time_stamp % 3600L) / 60);
+    unsigned long seconds = ( time_stamp % 60);
+    char bufstring[32];
+    std::sprintf(bufstring, "%d:%02d:%02d", hours, minutes, seconds);
+    std::string sf = bufstring;
+    return sf;
+}

@@ -1,7 +1,12 @@
 #ifndef STREAM_HH
 #define STREAM_HH
 
-#include <ESP8266WebServerSecure.h>
+#ifndef ESPASYNC
+    #include <ESP8266WebServerSecure.h>
+#else
+    #include <ESPAsyncWebserver.h>
+#endif
+
 #include <string>
 #include <deque>
 #include <map>
@@ -14,31 +19,35 @@ class StreamConnection {
 
 class StreamEvent {
     private:
-    unsigned long time_stamp;
+    unsigned long _time_stamp;
     std::string tag;
     std::string msg;
 
     public:
     StreamEvent(
-        unsigned long time_stamp,
+        unsigned long _time_stamp,
         std::string tag,
         std::string msg
     ):
-        time_stamp(time_stamp),
+        _time_stamp(_time_stamp),
         tag(tag),
         msg(msg)
     {};
-
+    unsigned long time_stamp(){
+        return this->_time_stamp;
+    };
     std::string format();
 };
 
 /**
  * Used for broadcast at the moment
  */
+/*
+template<typename ChannelId, typename StreamConnection>
 class OutputStream {
     private:
     std::deque<StreamEvent> stream_events;
-    std::map<std::string, StreamConnection> connections;
+    std::map<ChannelId, StreamConnection> connections;
 
     public:
 
@@ -48,7 +57,7 @@ class OutputStream {
 
     void add_message(StreamEvent);
 
-    std::string add_connection(StreamConnection);
+    ChannelId add_connection(StreamConnection);
 
     unsigned int connections_size() {
         return this->connections.size();
@@ -59,11 +68,11 @@ class OutputStream {
 
     OutputStream(
         std::deque<StreamEvent> stream_events,
-        std::map<std::string, StreamConnection> connections
+        std::map<ChannelId, StreamConnection> connections
     ):
         stream_events(stream_events),
         connections(connections)
     {};
-};
+};*/
 
 #endif
