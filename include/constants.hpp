@@ -9,8 +9,8 @@
 #define MCU_LED 16
 
 #define RELAY 13
-#define RELAY_ON pinMode(RELAY, INPUT)
-#define RELAY_OFF pinMode(RELAY, OUTPUT)
+#define RELAY_ON LOW
+#define RELAY_OFF HIGH
 
 #define DHTPIN 5
 #define DHTTYPE DHT11
@@ -80,7 +80,7 @@ static const char HTML_CLI_VIEW[] PROGMEM = R"EOF(
             on_poll=true;
             console.log(command.value);
             request = new Request(
-                "/cli/poll", {
+                "/cli/send", {
                     method: "POST",
                     credentials: 'include',
                     body: command.value,
@@ -94,28 +94,28 @@ static const char HTML_CLI_VIEW[] PROGMEM = R"EOF(
                 .then(data => {add_stream(data); on_poll=false;})
                 .catch(error => console.error('Error:', error));
         };
-        function startPollTimer() {
-            if (!on_poll) {
-                let request = new Request(
-                    "/cli/poll", {
-                        method: "GET",
-                        credentials: 'include',
-                        headers: {
-                            'Content-Type': 'text/plain'
-                        }
-                    }
-                );
-                fetch(request)
-                    .then(response => response.json())
-                    .then(data => add_stream(data))
-                    .catch(error => console.error('Error:', error));
-            };
-        };
-        setTimeout(
-            () => {
-                setInterval(startPollTimer, 15000);
-            }, 2000
-        );
+        // function startPollTimer() {
+        //     if (!on_poll) {
+        //         let request = new Request(
+        //             "/cli/poll", {
+        //                 method: "GET",
+        //                 credentials: 'include',
+        //                 headers: {
+        //                     'Content-Type': 'text/plain'
+        //                 }
+        //             }
+        //         );
+        //         fetch(request)
+        //             .then(response => response.json())
+        //             .then(data => add_stream(data))
+        //             .catch(error => console.error('Error:', error));
+        //     };
+        // };
+        // setTimeout(
+        //     () => {
+        //         setInterval(startPollTimer, 15000);
+        //     }, 2000
+        // );
     </script>
     </body></html>
 )EOF";

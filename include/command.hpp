@@ -1,87 +1,47 @@
-#ifndef COMMAND_HPP
-#define COMMAND_HPP
+#ifndef CMD_HPP
+#define CMD_HPP
 
+#include <WString.h>
 #include <functional>
-#include <vector>
-#include <string>
 #include <map>
-#include <optional>
+#include <vector>
 
-#include <DHT.h>
-#include "appstate.hpp"
-
-using CommandString = std::vector<std::string> ;
-
-enum CommandResultType {
-    Ok,
+enum CommandResult {
+    Done,
     AccessDenied,
-    InvalidUseage,
-    UnknownArgument,
-    InternalError
+    InvalidArgument,
+    Internal
 };
 
-using CommandResult = std::pair<CommandResultType, std::string>;
-
-using CommandCallback = std::function<CommandResult(void)>;
-
-class Command {
-    protected:
-    CommandCallback callback = nullptr;
-    public:
-    Command(CommandCallback callback): callback(callback) {};
-    CommandResult run() {
-        return this->callback();
-    }
+struct InputCommand {
+    String name;
+    std::vector<String> options;
+    InputCommand(String input);
 };
 
-class CommandConfig {
-    protected:
-        //CommandCallback callback;
-        std::string cmd_name;
-    public:
-        CommandConfig(
-            std::string cmd_name
-        ): cmd_name(cmd_name) {};
-        
-        virtual std::optional<Command*> parse(CommandString) = 0;
-        std::string name() { return this->cmd_name; };
+class Command;
+
+class CommandBroker {
+protected:
+    std::map<String, Command*> commands;
+public:
+    virtual bool borrow(String mark) = 0;
+    virtual bool is_borrowed() = 0;
+    virtual void free() = 0;
+    CommandResult interpretate(String cmd, String &output);
+    CommandBroker(std::map<String, Command*> commands): commands(commands) {};
 };
 
-template <typename A>
-class AppCmdConfig : public CommandConfig {
-    protected:
-    std::weak_ptr<A> app;
-    public:
-    virtual std::optional<Command*> parse(CommandString) = 0;
-    AppCmdConfig(
-        std::string name,
-        std::weak_ptr<A> app
-    ): CommandConfig(name), app(app)
-    {};
-};
-
-class TimerCmdConfig : public AppCmdConfig<Application> {
-    public:
-    inline static const std::string NAME = "timer";
-
-    std::optional<Command*> parse(CommandString) override;
-    // using AppCmdConfig<Application>::AppCmdConfig;
-    TimerCmdConfig(
-        std::weak_ptr<Application> app
-    ): AppCmdConfig<Application>::AppCmdConfig(NAME, app) {};
-};
-
-class CommandServer {
-    protected:
-        std::map<std::string, CommandConfig*> com_register={};
-    public:
-        std::optional<Command*> parse(CommandString tokens);
-        void register_cmd(CommandConfig*);
-        std::vector<std::string> cmd_list();
-
-        CommandServer() {
-            this->com_register = {};
-        }
+class Command{
+protected:
+    String _name;
+    CommandBroker* broker;
+public:
+    Command(String name, CommandBroker* broker): _name(name), broker(broker) {};
+    virtual CommandResult run(InputCommand input, String &output) = 0;
+    virtual String help() = 0;
+    String name() {return this->_name;}
+    virtual bool stop() = 0;
 };
 
 

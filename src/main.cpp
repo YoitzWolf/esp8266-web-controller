@@ -11,11 +11,11 @@
 #include <Ticker.h>
 
 #include "dhtloc.hpp"
-#include "timer.hpp"
-#include "utils.hpp"
-#include "appstate.hpp"
-#include "fs_utils.hpp"
 #include "command.hpp"
+#include "relay_broker.hpp"
+#include "utils.hpp"
+#include "fs_utils.hpp"
+
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 
@@ -23,12 +23,9 @@ BearSSL::ESP8266WebServerSecure server(PORT);
 BearSSL::ServerSessions serverCache(CACHE_SIZE);
 
 DHT dht(DHTPIN, DHTTYPE);
-CommandServer* com_server;
-std::shared_ptr<Application> app;
-std::weak_ptr<Application> weak_app;
 
-TimerCmdConfig* timer_cmd_conf;
 
+RelayBroker* relay_cmd_broker;
 
 bool auth(BearSSL::ESP8266WebServerSecure &server)
 {
@@ -59,8 +56,9 @@ void setup()
     Serial.begin(9600);
     pinMode(ESP_LED, OUTPUT);
     pinMode(MCU_LED, OUTPUT);
+    pinMode(RELAY, OUTPUT);
     pinMode(DHTPIN, INPUT);
-    RELAY_OFF;
+    digitalWrite(RELAY, RELAY_OFF);
     dht.begin();
     fs_begin();
     Serial.print("Connecting to ");
@@ -83,7 +81,6 @@ void setup()
     Serial.println("mDNS::");
     Serial.println(LOCAL_ESP_DNS);
     MDNS.addService("https", "tcp", PORT);
-
     timeClient.setUpdateInterval(TIME_UPDATE_INTERVAL);
     timeClient.begin();
     timeClient.setTimeOffset(TIMEZONE_GAP);
@@ -98,110 +95,9 @@ void setup()
     server.getServer().setCache(&serverCache);
     /*-------------------------------*/
     timeClient.forceUpdate();
-    // com_server = new CommandServer();
-    app = std::shared_ptr<Application>(
-        new Application(
-            &timeClient,
-            &dht
-        )
+    relay_cmd_broker = new RelayBroker(
+        RELAY, RELAY_ON, RELAY_OFF, {}
     );
-    weak_app = app;
-    app->add_timer(
-        FLAG_CALL,
-        VIRTUAL_HANDLE_NOW,
-        "NTC-update-timer",
-        TIME_UPDATE_INTERVAL,
-        [](){
-            auto tim = app->get_ntc_timer();
-            tim -> forceUpdate();
-            auto timeStamp = tim->getEpochTime();
-            Serial.println("Time Synced");
-            app->add_message(
-            StreamEvent(
-                timeStamp,
-                "Sys",
-                "Sync time: " + timestamp_to_str(timeStamp)));
-        },
-        true
-    );
-    
-    /*app->add_timer(
-        FLAG_CALL,
-        MEMO_SYNC,
-        "Long Memo Timer",
-        MINUTE*1000, // to milliseconds
-        []()
-        {   
-            auto timeStamp = app->get_ntc_timer()->getEpochTime();
-            digitalWrite(MCU_LED, LOW);
-            app->add_message(
-                StreamEvent(
-                    timeStamp,
-                    "Sys",
-                    "Memo-sync timer event"
-                )
-            );
-            digitalWrite(MCU_LED, HIGH);
-        },
-        true
-    );*/
-
-    app->add_timer(
-        FLAG_CALL,
-        VIRTUAL_WAIT, //MEMO_SYNC,
-        "Relay-On",
-        24*60*MINUTE*MS,
-        [](){
-            // auto tim = app->get_ntc_timer();
-            // tim -> forceUpdate();
-            // auto timeStamp = tim->getEpochTime();
-            // app->add_message(
-            // StreamEvent(
-            //     timeStamp,
-            //     "Sys",
-            //     "Sync time: " + timestamp_to_str(timeStamp)));
-            RELAY_ON;
-            auto timeStamp = app->get_ntc_timer()->getEpochTime();
-            digitalWrite(MCU_LED, LOW);
-            app->add_message(
-                StreamEvent(
-                    timeStamp,
-                    "Sys",
-                    "Relay-on"
-                )
-            );
-            Serial.println("Relay timer log: Relay on");
-            app->add_timer(
-                FLAG_CALL,
-                VIRTUAL_HANDLE_NOW,
-                "Relay-off",
-                10*SECOND*MS,
-                [](){
-                    RELAY_OFF;
-                    auto timeStamp = app->get_ntc_timer()->getEpochTime();
-                    Serial.println("Relay timer log: Relay off");
-                    app->add_message(
-                        StreamEvent(
-                            timeStamp,
-                            "Sys",
-                            "Relay-off"
-                        )
-                    );
-                },
-                false
-            );
-        },
-        true
-    );
-    /*-------------------------------*/
-    com_server = new CommandServer();
-    timer_cmd_conf = new TimerCmdConfig (
-        weak_app
-    );
-    com_server->register_cmd (
-      timer_cmd_conf  
-    );
-    /*-------------------------------*/
     server.on(
         "/",
         HTTP_GET,
@@ -230,9 +126,10 @@ void setup()
                 200,
                 "text/html",
                 HTML_CLI_VIEW);
-        });
+        }
+    );
     server.on(
-        "/cli/poll",
+        "/cli/send",
         []()
         {
             digitalWrite(ESP_LED, LOW);
@@ -242,75 +139,37 @@ void setup()
                 return server.send(403, "text/plain", "Denied");
             }
             auto client = server.client();
-            Serial.println("Poll");
+            Serial.println("CMD RECIEVED:");
             String cmd = server.arg("plain");
             cmd.trim();
+            cmd.toUpperCase();
             Serial.println(cmd);
-            if (auto shared = weak_app.lock()) {
-                if (cmd.length() > 0) {
-                    std::string ipStr  = client.remoteIP().toString().c_str();
-                    std::string cmdStr = cmd.c_str(); 
-                    app->add_message(
-                        StreamEvent (
-                            app->get_ntc_timer()->getEpochTime(),
-                            ipStr,
-                            cmdStr
-                        )
-                    );
-                    CommandString tokens = {};
-                    //cmd.indexOf
-                    int it = cmd.indexOf(' ');
-                    int it_last = 0;
-                    if (it == -1) {
-                        tokens.push_back(cmdStr);
-                    } else {
-                        while (it != -1) {
-                            if (it != 0) {
-                                std::string sub = cmd.substring(it_last, it).c_str();
-                                tokens.push_back( sub );
-                            }
-                            // cmd = cmd.substring(it+1, cmd.length());
-                            it_last = it+1;
-                            it = cmd.indexOf(' ', it+1);
-                        }
-                        std::string sub = cmd.substring(it_last, cmd.length()).c_str();
-                        tokens.push_back( sub );
-                    }
-                    Serial.println("Tokenized");
-                    auto com = com_server->parse(tokens);
-                    if (com != std::nullopt) {
-                        Serial.print("Run");
-                        auto res = com.value()->run();
-                        Serial.print(res.second.c_str());
-                        app->add_message(
-                            StreamEvent (
-                                app->get_ntc_timer()->getEpochTime(),
-                                "Sys",
-                                res.second
-                            )
-                        );
-                    } else {
-                        Serial.println("Invalid");
-                        app->add_message(
-                        StreamEvent (
-                                app->get_ntc_timer()->getEpochTime(),
-                                "Sys",
-                                "Invalid command"
-                            )
-                        ); 
-                    }
+            if (cmd.length() > 0) {
+                auto f = cmd.indexOf(" ");
+                auto name = cmd.substring(0, f);
+                name.trim();
+                cmd = cmd.substring(f);
+                cmd.trim();
+                String out = "";
+                CommandResult res=CommandResult::InvalidArgument;
+                if (name == "R01") {
+                    res = relay_cmd_broker->interpretate(cmd, out);
+
+                } else {
+                    out = "Unknown environment";
                 }
-                String json = shared->poll_connection( {client.remoteIP(), client.remotePort()} );
-                shared.reset();
-                digitalWrite(ESP_LED, HIGH);
+                String json = "{ \"data\": [ \"";
+                json.concat(comm_res_to_str(res));
+                json.concat(": ");
+                json.concat(out);
+                json.concat("\"]}");
                 server.send(200, "text/json", json);
-                json.clear();
-            } else {
-                server.send(512, "text/plain", "Ptr error");
+
             }
             Serial.println("Request end");
             digitalWrite(ESP_LED, HIGH);
         });
+
     server.begin();
     digitalWrite(ESP_LED, HIGH);
     digitalWrite(MCU_LED, HIGH);
@@ -318,49 +177,14 @@ void setup()
     Serial.println(dhtres.to_json().c_str());
 }
 
-// String formattedDate;
-unsigned long timeStamp;
 
 void loop()
 {
     MDNS.update();
     server.handleClient();
     yield();
-    app->handle_flag_timers();
-    yield();
-    app->clean_dead();
-    yield();
+    // app->handle_flag_timers();
+    // yield();
+    // app->clean_dead();
+    // yield();
 }
-
-/*server.on(
-      "/cli/post",
-      HTTP_POST,
-      []() {
-        digitalWrite(ESP_LED, LOW);
-        BearSSL::WiFiClientSecure client = server.client();
-        IPAddress clientIP = server.client().remoteIP();
-        Serial.println("CLI POST>>");
-        Serial.println("Input wait");
-        // while(!client.available()){}
-        Serial.println(client.available());
-
-        if (!auth(server)) {
-          server.send(403, "text/plain", "ACCESS DENIED");
-          return;
-        }
-        String cmd = server.arg("plain");
-        Serial.println(cmd);
-        Serial.println("--");
-        if (cmd.length() != 0) {
-            app->add_message(
-                StreamEvent (
-                    app->get_ntc_timer()->getEpochTime(),
-                    clientIP.toString().c_str(),
-                    cmd.c_str()
-                )
-            );
-            server.send(200, "text/plain", "PASSED");
-        } else {
-            server.send(200, "text/plain", "EMPTY_REQUEST");
-        }
-    });*/

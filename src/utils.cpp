@@ -1,5 +1,7 @@
 
 #include "utils.hpp"
+#include <WString.h>
+#include <command.hpp>
 
 unsigned long __daysOfMonth[] = { 31, 28, 31, 30, 31, 30,
                           31, 31, 30, 31, 30, 31 };
@@ -37,4 +39,39 @@ std::string timestamp_to_str_time(unsigned long time_stamp) {
     std::sprintf(bufstring, "%d:%02d:%02d", hours, minutes, seconds);
     std::string sf = bufstring;
     return sf;
+}
+
+float com_string_to_seconds(String s) {
+    if (s.length() < 2) {
+        return -1;
+    }
+    auto digit = s.substring(0, s.length()-1).toFloat();
+    auto mark = s.end();
+    if (*mark == 'm') {
+        digit *= 60;
+    } else if (*mark == 'h') {
+        digit *= 60*60;
+    } else if (*mark == 'm') {
+        digit *= 60*60*24;
+    }
+    return (digit);
+}
+
+String comm_res_to_str(CommandResult r) {
+    switch (r)
+    {
+        case Done:
+            return "Done";
+            break;
+        case AccessDenied:
+            return "AccessDenied";
+            break;
+        case InvalidArgument:
+            return "InvalidArgument";
+            break;
+        case Internal:
+            return "Internal";
+            break;
+    }
+    return "Unknown Error";
 }
